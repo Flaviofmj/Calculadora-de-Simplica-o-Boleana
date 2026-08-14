@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Veitch-Karnaugh</title>
+<style>
+:root{
+  --bg:#1a1a2e;--bg2:#16213e;--card:#0d1f36;
+  --accent:#2ec4b6;--accent2:#21918a;
+  --txt:#e2e2f0;--txt2:#8080a8;
+  --red:#e94560;--org:#fca652;
+  --border:#1e2f50;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;line-height:1.6}
+
+/* HEADER */
+header{background:linear-gradient(135deg,#0d1f36 0%,#1a1a2e 100%);padding:1.5rem 1rem;text-align:center;border-bottom:2px solid var(--accent);position:sticky;top:0;z-index:200;backdrop-filter:blur(14px)}
+header h1{font-size:clamp(1.1rem,3.5vw,1.9rem);color:var(--accent);font-weight:700;letter-spacing:.03em}
+header p{color:var(--txt2);font-size:.82rem;margin-top:.2rem}
+
+/* LAYOUT */
+.wrap{max-width:1200px;margin:0 auto;padding:1.2rem;display:flex;flex-direction:column;gap:1.1rem}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.3rem;transition:border-color .3s;animation:fu .35s ease}
+.card:hover{border-color:rgba(46,196,182,.3)}
+@keyframes fu{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.ch{display:flex;align-items:center;gap:.6rem;margin-bottom:.85rem;padding-bottom:.65rem;border-bottom:1px solid var(--border)}
+.ch h2{font-size:.97rem;font-weight:600;color:var(--accent)}
+.badge{background:var(--card);color:var(--txt2);padding:.12rem .5rem;border-radius:20px;font-size:.7rem}
+.info{background:rgba(46,196,182,.07);border-left:3px solid var(--accent);padding:.55rem .85rem;border-radius:0 6px 6px 0;margin-bottom:.85rem;font-size:.82rem;color:var(--txt2);line-height:1.55}
+.info b{color:var(--txt)}
+
+/* VAR BUTTONS */
+.vsel{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+.vsel-lbl{color:var(--txt2);font-size:.86rem}
+.vbtn{width:2.7rem;height:2.7rem;display:flex;align-items:center;justify-content:center;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-size:1rem;font-weight:700;color:var(--txt2);background:var(--bg);transition:all .18s;user-select:none}
+.vbtn:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-2px)}
+.vbtn.active{border-color:var(--accent);background:rgba(46,196,182,.13);color:var(--accent);box-shadow:0 0 10px rgba(46,196,182,.28)}
+
+/* TRUTH TABLE */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:.42rem .65rem;text-align:center;border:1px solid var(--border);font-size:.87rem}
+th{background:var(--card);color:var(--accent);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}
+tr:nth-child(even){background:rgba(255,255,255,.016)}
+tr:hover{background:rgba(46,196,182,.04)}
+.ocell{cursor:pointer;font-weight:700;transition:transform .13s;user-select:none}
+.ocell:hover{transform:scale(1.3)}
+.ocell.readonly{cursor:default}
+.ocell.readonly:hover{transform:none}
+.v1{color:var(--accent)}.v0{color:var(--red)}.vx{color:var(--org)}
+
+/* TERM BOXES */
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
+@media(max-width:560px){.tgrid{grid-template-columns:1fr}}
+.tbox{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.85rem}
+.tbox h3{color:var(--accent);font-size:.83rem;margin-bottom:.4rem;font-weight:600}
+.tbox .num{font-family:monospace;font-size:.88rem;margin-bottom:.3rem}
+.tbox .alg{font-family:monospace;font-size:.76rem;color:var(--txt2);word-break:break-all;line-height:1.5}
+.mtag{display:inline-block;background:rgba(46,196,182,.1);border:1px solid rgba(46,196,182,.26);border-radius:4px;padding:.04rem .36rem;font-size:.77rem;font-family:monospace;margin:.08rem;color:var(--accent)}
+.Mtag{display:inline-block;background:rgba(233,69,96,.1);border:1px solid rgba(233,69,96,.26);border-radius:4px;padding:.04rem .36rem;font-size:.77rem;font-family:monospace;margin:.08rem;color:var(--red)}
+.xtag{display:inline-block;background:rgba(252,166,82,.1);border:1px solid rgba(252,166,82,.26);border-radius:4px;padding:.04rem .36rem;font-size:.77rem;font-family:monospace;margin:.08rem;color:var(--org)}
+
+/* EXPRESSIONS */
+.erow{display:flex;flex-direction:column;gap:.65rem}
+.elbl{font-size:.7rem;color:var(--txt2);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem}
+.expr{font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.8rem;font-size:.9rem;word-break:break-all}
+.expr.sop{border-left:3px solid var(--accent)}
+.expr.pos{border-left:3px solid var(--org)}
+
+/* K-MAP */
+.kmap-outer{overflow-x:auto;padding:.25rem 0}
+.kmap-wrap{display:flex;flex-wrap:wrap;gap:1.8rem;align-items:flex-start}
+.kmap-unit{display:flex;flex-direction:column;align-items:center}
+.kmap-sublbl{font-size:.76rem;color:var(--accent);margin-bottom:.4rem;font-weight:600;background:rgba(46,196,182,.08);padding:.15rem .65rem;border-radius:4px}
+.kmt{border-collapse:collapse;font-size:.8rem}
+.kmt th,.kmt td{width:44px;height:44px;text-align:center;vertical-align:middle;border:1px solid var(--border);position:relative}
+.kmt .corner{background:transparent;border:none;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:.66rem;color:var(--txt2);width:48px}
+.kmt .rhdr{background:var(--card);color:var(--txt2);font-size:.72rem;font-weight:600;width:48px}
+.kmt .chdr{background:var(--card);color:var(--txt2);font-size:.72rem;font-weight:600}
+.kcell{font-weight:700;font-size:.92rem}
+.midx{position:absolute;top:2px;left:3px;font-size:.5rem;color:var(--txt2);font-weight:400;font-family:monospace}
+.glegend{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.85rem}
+.gitem{display:flex;align-items:center;gap:.32rem;padding:.2rem .6rem;border-radius:20px;font-size:.77rem;font-family:monospace;border:1px solid transparent}
+.gdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+/* RESULTS */
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
+@media(max-width:560px){.rgrid{grid-template-columns:1fr}}
+.rbox{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.95rem;text-align:center}
+.rbox.rs{border-top:3px solid var(--accent)}
+.rbox.rp{border-top:3px solid var(--org)}
+.rlbl{font-size:.7rem;color:var(--txt2);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.45rem}
+.rval{font-family:monospace;font-size:1.03rem;font-weight:700;word-break:break-all;line-height:1.5}
+.rbox.rs .rval{color:var(--accent)}
+.rbox.rp .rval{color:var(--org)}
+
+/* BUTTONS */
+.btn{padding:.52rem 1.05rem;border-radius:6px;border:none;cursor:pointer;font-size:.86rem;font-weight:600;transition:all .18s}
+.btn-a{background:var(--accent);color:var(--bg)}
+.btn-a:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 14px rgba(46,196,182,.26)}
+.btn-o{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+.btn-o:hover{background:rgba(46,196,182,.09)}
+.btn-r{background:transparent;border:1px solid var(--red);color:var(--red)}
+.btn-r:hover{background:rgba(233,69,96,.09)}
+.brow{display:flex;gap:.6rem;flex-wrap:wrap}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.6rem;right:1.6rem;background:var(--card);border:1px solid var(--accent);color:var(--accent);padding:.65rem 1rem;border-radius:8px;font-size:.86rem;z-index:9999;opacity:0;transform:translateY(7px);transition:all .28s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* SHARE URL */
+#share-url{margin-top:.75rem;word-break:break-all;font-family:monospace;font-size:.78rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.65rem;display:none;color:var(--txt2)}
+
+/* MODO ALUNO */
+.student-banner{background:linear-gradient(135deg,rgba(46,196,182,.12) 0%,rgba(33,145,138,.07) 100%);border:2px solid var(--accent);border-radius:12px;padding:1.4rem;display:none;animation:fu .35s ease}
+.student-banner-title{display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem}
+.student-banner-title h2{font-size:1.08rem;font-weight:700;color:var(--accent)}
+.student-badge{background:var(--accent);color:var(--bg);padding:.15rem .55rem;border-radius:20px;font-size:.7rem;font-weight:700}
+.student-desc{color:var(--txt2);font-size:.84rem;margin-bottom:1rem;line-height:1.6}
+.student-desc b{color:var(--txt)}
+.student-fields{display:flex;flex-direction:column;gap:.85rem}
+.student-field-label{font-size:.7rem;color:var(--txt2);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.35rem}
+.student-field-row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+.student-input{flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.62rem .9rem;color:var(--txt);font-family:monospace;font-size:.9rem;outline:none;transition:border-color .18s}
+.student-input:focus{border-color:var(--accent)}
+.student-feedback{margin-top:.42rem;font-size:.86rem;font-weight:600;min-height:1.3em}
+.student-feedback.ok{color:var(--accent)}
+.student-feedback.fail{color:var(--org)}
+.student-actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.5rem;padding-top:.85rem;border-top:1px solid var(--border)}
+
+/* PRINT */
+@media print{
+  body{background:#fff;color:#000}
+  header{position:static;background:#fff;border-bottom:2px solid #333}
+  header h1{color:#333}
+  .card{background:#fff;border:1px solid #ccc;page-break-inside:avoid}
+  .brow,.toast,.student-banner{display:none!important}
+  .v1{color:#008080}.v0{color:#c00}.vx{color:#a60}
+  .kmt th,.kmt td{border-color:#aaa}
+  .expr{background:#f5f5f5;border-color:#ccc}
+}
+@media(max-width:480px){.kmt th,.kmt td{width:38px;height:38px}}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent2)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Calculadora de Veitch-Karnaugh</h1>
+  <p id="header-sub">Tabela verdade interativa &nbsp;&bull;&nbsp; Mapas K &nbsp;&bull;&nbsp; Quine-McCluskey &nbsp;&bull;&nbsp; SOP &amp; POS</p>
+</header>
+
+<div class="wrap" id="app">
+
+  <!-- MODO ALUNO BANNER -->
+  <div class="student-banner" id="student-banner">
+    <div class="student-banner-title">
+      <h2>&#127891; Modo Aluno</h2>
+      <span class="student-badge">Exercicio</span>
+    </div>
+    <p class="student-desc">
+      Voce recebeu este exercicio do professor. Analise a <b>tabela verdade</b> e o <b>Mapa de Karnaugh</b> abaixo.
+      Digite sua resposta nos campos e clique <b>Verificar</b> para conferir.
+      Quando quiser ver o gabarito completo, clique <b>Revelar Resposta</b>.
+    </p>
+    <div class="student-fields">
+      <div>
+        <div class="student-field-label">Sua resposta &mdash; SOP Simplificado (Soma de Produtos &Sigma;m)</div>
+        <div class="student-field-row">
+          <input type="text" id="student-sop-input" class="student-input" placeholder="Ex: AB + A'C + B'D ...">
+          <button class="btn btn-o" onclick="checkStudentAnswer('sop')">Verificar SOP</button>
+        </div>
+        <div id="student-sop-feedback" class="student-feedback"></div>
+      </div>
+      <div>
+        <div class="student-field-label">Sua resposta &mdash; POS Simplificado (Produto de Somas &Pi;M)</div>
+        <div class="student-field-row">
+          <input type="text" id="student-pos-input" class="student-input" placeholder="Ex: (A+B)(A'+C) ...">
+          <button class="btn btn-o" onclick="checkStudentAnswer('pos')">Verificar POS</button>
+        </div>
+        <div id="student-pos-feedback" class="student-feedback"></div>
+      </div>
+    </div>
+    <div class="student-actions">
+      <button class="btn btn-a" id="student-reveal-btn" onclick="revealAnswer()">&#128065; Revelar Resposta</button>
+    </div>
+  </div>
+
+  <!-- 1. Variaveis -->
+  <div class="card">
+    <div class="ch"><h2>1. Numero de Variaveis</h2><span class="badge">2 a 6</span></div>
+    <div class="info">
+      Escolha quantas variaveis de entrada a funcao possui. Sao nomeadas <b>A, B, C, D, E, F</b> (A = bit mais significativo).
+      Uma funcao com <b>n</b> variaveis tem <b>2<sup>n</sup></b> combinacoes possiveis.
+    </div>
+    <div class="vsel" id="vsel-row">
+      <span class="vsel-lbl">Variaveis:</span>
+      <button class="vbtn" onclick="setVars(2)">2</button>
+      <button class="vbtn" onclick="setVars(3)">3</button>
+      <button class="vbtn active" onclick="setVars(4)">4</button>
+      <button class="vbtn" onclick="setVars(5)">5</button>
+      <button class="vbtn" onclick="setVars(6)">6</button>
+    </div>
+  </div>
+
+  <!-- 2. Tabela Verdade -->
+  <div class="card">
+    <div class="ch"><h2>2. Tabela Verdade</h2><span class="badge" id="tt-badge">Interativa</span></div>
+    <div class="info" id="tt-info">
+      Clique na coluna <b>F</b> para alternar entre <b style="color:var(--accent)">1</b> (verdadeiro),
+      <b style="color:var(--red)">0</b> (falso) e <b style="color:var(--org)">X</b> (don&apos;t care — saida indiferente, aproveitada na simplificacao).
+      Todos os resultados atualizam instantaneamente.
+    </div>
+    <div class="tbl-wrap"><table id="ttbl"></table></div>
+  </div>
+
+  <!-- 3. Soma de Produtos (SOP) e Produto de Somas (POS) -->
+  <div class="card">
+    <div class="ch"><h2>3. Soma de Produtos (SOP) e Produto de Somas (POS)</h2></div>
+    <div class="info">
+      <b>Soma de Produtos (SOP) &mdash; &Sigma;m<sub>i</sub>:</b> produto canonico (AND de literais) para a linha onde F&nbsp;=&nbsp;1.
+      &nbsp;<b>Produto de Somas (POS) &mdash; &Pi;M<sub>i</sub>:</b> soma canonica (OR de literais) para a linha onde F&nbsp;=&nbsp;0.
+      &nbsp;<b>Don&apos;t care d<sub>i</sub>:</b> saida indiferente; usada nos agrupamentos mas nao precisa ser coberta.
+    </div>
+    <div id="sec-terms"></div>
+  </div>
+
+  <!-- 4. Formas Canonicas -->
+  <div class="card">
+    <div class="ch"><h2>4. Formas Canonicas</h2></div>
+    <div class="info">
+      <b>SOP canonico:</b> OR de todos os termos da Soma de Produtos expandidos &mdash; forma mais longa antes da simplificacao.
+      <b>POS canonico:</b> AND de todos os termos do Produto de Somas expandidos &mdash; igualmente nao simplificado.
+      Ambas representam a mesma funcao.
+    </div>
+    <div id="sec-canonical"></div>
+  </div>
+
+  <!-- 5. Mapa K SOP -->
+  <div class="card">
+    <div class="ch"><h2>5. Mapa de Karnaugh &mdash; Soma de Produtos (SOP) &mdash; agrupa 1s</h2></div>
+    <div class="info">
+      Celulas adjacentes no mapa diferem em <b>apenas 1 bit</b> (codigo Gray), inclusive nas bordas &mdash; o mapa e <b>toroidal</b>.
+      Grupos de 2<sup>k</sup> uns eliminam k variaveis, reduzindo a expressao SOP (Soma de Produtos &Sigma;m).
+      Cada cor representa um implicante primo selecionado.
+    </div>
+    <div id="sec-kmap-sop"></div>
+  </div>
+
+  <!-- 6. Expressoes Simplificadas -->
+  <div class="card" id="sec-simplified-card">
+    <div class="ch"><h2>6. Expressoes Simplificadas</h2></div>
+    <div id="sec-simplified"></div>
+  </div>
+
+  <!-- Ferramentas -->
+  <div class="card">
+    <div class="ch"><h2>Ferramentas</h2></div>
+    <div class="brow">
+      <button class="btn btn-a" onclick="shareExercise()">&#128279; Modo Professor</button>
+      <button class="btn btn-o" onclick="exportPDF()">&#128196; Exportar PDF</button>
+      <button class="btn btn-o" onclick="exportPNG()">&#128247; Exportar PNG</button>
+      <button class="btn btn-r" onclick="resetAll()">&#8635; Resetar</button>
+    </div>
+    <div id="share-url"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================================================================
+   CONSTANTES E ESTADO
+   ================================================================ */
+const GC = ['#2ec4b6','#ffa64d','#e94560','#9370db','#4ec94e','#f5c518','#5baaf5','#ff6eb4','#ff7043','#66bb6a'];
+const G2 = [0,1,3,2]; // Gray 2 bits
+const AV = ['A','B','C','D','E','F'];
+
+let nV = 4;
+let OUT = new Array(16).fill(0); // 0 | 1 | 'X'
+let isStudentMode = false;
+
+/* ================================================================
+   UTIL
+   ================================================================ */
+function bin(n,l){ return n.toString(2).padStart(l,'0'); }
+
+function rgba(hex,a){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+/* ================================================================
+   ACESSORES
+   ================================================================ */
+const MTs  = ()=>OUT.reduce((a,v,i)=>{if(v===1)a.push(i);return a;},[]);
+const MXTs = ()=>OUT.reduce((a,v,i)=>{if(v===0)a.push(i);return a;},[]);
+const DCs  = ()=>OUT.reduce((a,v,i)=>{if(v==='X')a.push(i);return a;},[]);
+
+/* ================================================================
+   QUINE-McCLUSKEY (interno — nao exibido ao usuario)
+   ================================================================ */
+function qm(mts, dcs, n){
+  if(!mts.length) return {pis:[], log:[]};
+  const all=[...new Set([...mts,...dcs])];
+
+  let level = all.map(m=>({p:bin(m,n), ms:new Set([m]), used:false}));
+  const pis=[], log=[], seen=new Set();
+
+  while(level.length){
+    const byK={};
+    for(const t of level){
+      const k=(t.p.match(/1/g)||[]).length;
+      (byK[k]=byK[k]||[]).push(t);
+    }
+    const ks=Object.keys(byK).map(Number).sort((a,b)=>a-b);
+    const nxSeen=new Set(), nx=[];
+    const iterLog=[];
+
+    for(let i=0;i<ks.length-1;i++){
+      for(const t1 of byK[ks[i]]){
+        for(const t2 of byK[ks[i+1]]){
+          const mp=mrgP(t1.p,t2.p);
+          if(mp!==null){
+            t1.used=t2.used=true;
+            if(!nxSeen.has(mp)){
+              nxSeen.add(mp);
+              const nm={p:mp, ms:new Set([...t1.ms,...t2.ms]), used:false};
+              nx.push(nm);
+              iterLog.push({from:[...t1.ms,...t2.ms].sort((a,b)=>a-b), p:mp});
+            }
+          }
+        }
+      }
+    }
+    if(iterLog.length) log.push(iterLog);
+
+    for(const t of level)
+      if(!t.used && mts.some(m=>t.ms.has(m)) && !seen.has(t.p)){
+        seen.add(t.p);
+        pis.push(t);
+      }
+
+    level=nx;
+  }
+  return {pis, log};
+}
+
+function mrgP(p1,p2){
+  let d=0,pos=-1;
+  for(let i=0;i<p1.length;i++){
+    if(p1[i]!==p2[i]){
+      if(p1[i]==='-'||p2[i]==='-') return null;
+      if(++d>1) return null;
+      pos=i;
+    }
+  }
+  return d===1 ? p1.slice(0,pos)+'-'+p1.slice(pos+1) : null;
+}
+
+/* ================================================================
+   COBERTURA MINIMA
+   ================================================================ */
+function minCov(pis, mts){
+  if(!mts.length||!pis.length) return [];
+  const sel=[], cov=new Set();
+
+  // essenciais
+  let chg=true;
+  while(chg){
+    chg=false;
+    for(const m of mts){
+      if(cov.has(m)) continue;
+      const av=pis.filter(pi=>pi.ms.has(m)&&!sel.includes(pi));
+      if(av.length===1){
+        sel.push(av[0]);
+        av[0].ms.forEach(x=>{if(mts.includes(x))cov.add(x);});
+        chg=true;
+      }
+    }
+  }
+
+  // greedy
+  let rem=mts.filter(m=>!cov.has(m));
+  while(rem.length){
+    let best=null,bestN=0;
+    for(const pi of pis){
+      if(sel.includes(pi)) continue;
+      const n=rem.filter(m=>pi.ms.has(m)).length;
+      if(n>bestN){bestN=n;best=pi;}
+    }
+    if(!best) break;
+    sel.push(best);
+    rem=rem.filter(m=>!best.ms.has(m));
+  }
+  return sel;
+}
+
+/* ================================================================
+   EXPRESSOES
+   ================================================================ */
+function sopT(p,vars){
+  let t='';
+  for(let i=0;i<p.length;i++){
+    if(p[i]==='1') t+=vars[i];
+    else if(p[i]==='0') t+=vars[i]+"'";
+  }
+  return t||'1';
+}
+
+function posF(p,vars){
+  const l=[];
+  for(let i=0;i<p.length;i++){
+    if(p[i]==='0') l.push(vars[i]);
+    else if(p[i]==='1') l.push(vars[i]+"'");
+  }
+  return l.length?'('+l.join('+')+')':'(0)';
+}
+
+function sopExpr(cov,mts,vars){
+  if(!mts.length) return '0';
+  if(!cov.length) return '0';
+  if(cov.some(pi=>pi.p==='-'.repeat(vars.length))) return '1';
+  return cov.map(pi=>sopT(pi.p,vars)).join(' + ');
+}
+
+function posExpr(cov,mxts,vars){
+  if(!mxts.length) return '1';
+  if(!cov.length) return '1';
+  if(cov.some(pi=>pi.p==='-'.repeat(vars.length))) return '0';
+  return cov.map(pi=>posF(pi.p,vars)).join('');
+}
+
+function mtsAlg(mts,vars){
+  return mts.map(m=>{
+    let t='';
+    for(let j=0;j<vars.length;j++){
+      const b=(m>>(vars.length-1-j))&1;
+      t+=b?vars[j]:vars[j]+"'";
+    }
+    return t;
+  }).join(' + ');
+}
+
+function mxtsAlg(mxts,vars){
+  return mxts.map(m=>{
+    const l=vars.map((v,j)=>{
+      const b=(m>>(vars.length-1-j))&1;
+      return b?v+"'":v;
+    });
+    return '('+l.join('+')+')';
+  }).join('');
+}
+
+/* ================================================================
+   CONFIG DO MAPA K
+   ================================================================ */
+function kCfg(){
+  const G=G2;
+  if(nV===2) return{rows:2,cols:2,nM:1,corner:'A\\B',rL:['0','1'],cL:['0','1'],mL:[''],cell:(r,c,mi)=>r*2+c};
+  if(nV===3) return{rows:2,cols:4,nM:1,corner:'A\\BC',rL:['0','1'],cL:['00','01','11','10'],mL:[''],cell:(r,c,mi)=>r*4+G[c]};
+  if(nV===4) return{rows:4,cols:4,nM:1,corner:'AB\\CD',rL:['00','01','11','10'],cL:['00','01','11','10'],mL:[''],cell:(r,c,mi)=>G[r]*4+G[c]};
+  if(nV===5) return{rows:4,cols:4,nM:2,corner:'AB\\CD',rL:['00','01','11','10'],cL:['00','01','11','10'],mL:['E=0','E=1'],cell:(r,c,mi)=>G[r]*8+G[c]*2+mi};
+  /*6*/       return{rows:4,cols:4,nM:4,corner:'AB\\CD',rL:['00','01','11','10'],cL:['00','01','11','10'],mL:['EF=00','EF=01','EF=11','EF=10'],cell:(r,c,mi)=>G[r]*16+G[c]*4+G[mi]};
+}
+
+/* ================================================================
+   RENDER — TABELA VERDADE
+   ================================================================ */
+function renderTT(){
+  const vars=AV.slice(0,nV), cnt=1<<nV;
+  let h='<thead><tr><th>#</th>';
+  vars.forEach(v=>h+=`<th>${v}</th>`);
+  h+='<th>F</th></tr></thead><tbody>';
+  for(let i=0;i<cnt;i++){
+    h+=`<tr><td style="color:var(--txt2);font-size:.76em">${i}</td>`;
+    for(let j=0;j<nV;j++) h+=`<td>${(i>>(nV-1-j))&1}</td>`;
+    const v=OUT[i];
+    const cl=v==='X'?'vx':(v===1?'v1':'v0');
+    if(isStudentMode){
+      h+=`<td class="ocell readonly ${cl}">${v==='X'?'X':v}</td></tr>`;
+    } else {
+      h+=`<td class="ocell ${cl}" onclick="tog(${i})" title="clique para alternar">${v==='X'?'X':v}</td></tr>`;
+    }
+  }
+  h+='</tbody>';
+  document.getElementById('ttbl').innerHTML=h;
+}
+
+function tog(i){
+  if(isStudentMode) return;
+  OUT[i]=OUT[i]===0?1:(OUT[i]===1?'X':0);
+  update();
+}
+
+/* ================================================================
+   RENDER — TERMOS
+   ================================================================ */
+function renderTerms(){
+  const mts=MTs(), mxts=MXTs(), dcs=DCs();
+  const vars=AV.slice(0,nV), fn=`F(${vars.join(',')})`;
+  const mNum=mts.length?`\u03A3m(${mts.join(',')})`:`\u03A3m() = 0`;
+  const xNum=mxts.length?`\u03A0M(${mxts.join(',')})`:`\u03A0M() = 1`;
+  const sAlg=mts.length?`${fn} = ${mtsAlg(mts,vars)}`:`${fn} = 0`;
+  const pAlg=mxts.length?`${fn} = ${mxtsAlg(mxts,vars)}`:`${fn} = 1`;
+
+  let h=`<div class="tgrid">
+    <div class="tbox">
+      <h3>Soma de Produtos (SOP) &mdash; &Sigma;m (F&nbsp;=&nbsp;1)</h3>
+      <div class="num">${mNum}</div>
+      <div>${mts.map(m=>`<span class="mtag">${m}</span>`).join('')||'<span style="color:var(--txt2)">nenhum</span>'}</div>
+      <div class="alg" style="margin-top:.4rem">${sAlg}</div>
+    </div>
+    <div class="tbox">
+      <h3>Produto de Somas (POS) &mdash; &Pi;M (F&nbsp;=&nbsp;0)</h3>
+      <div class="num">${xNum}</div>
+      <div>${mxts.map(m=>`<span class="Mtag">${m}</span>`).join('')||'<span style="color:var(--txt2)">nenhum</span>'}</div>
+      <div class="alg" style="margin-top:.4rem">${pAlg}</div>
+    </div>
+  </div>`;
+  if(dcs.length) h+=`<div class="tbox" style="margin-top:.85rem">
+    <h3>Don&apos;t Cares (F = X)</h3>
+    <div class="num">d(${dcs.join(',')})</div>
+    <div>${dcs.map(m=>`<span class="xtag">${m}</span>`).join('')}</div>
+  </div>`;
+  document.getElementById('sec-terms').innerHTML=h;
+}
+
+/* ================================================================
+   RENDER — CANONICAS
+   ================================================================ */
+function renderCanonical(){
+  const mts=MTs(), mxts=MXTs(), vars=AV.slice(0,nV), fn=`F(${vars.join(',')})`;
+  const sf=mts.length?`${fn} = ${mtsAlg(mts,vars)}`:`${fn} = 0`;
+  const pf=mxts.length?`${fn} = ${mxtsAlg(mxts,vars)}`:`${fn} = 1`;
+  document.getElementById('sec-canonical').innerHTML=`
+    <div class="erow">
+      <div><div class="elbl">Forma Canonica SOP &mdash; Soma de Produtos (&Sigma;m)</div><div class="expr sop">${sf}</div></div>
+      <div><div class="elbl">Forma Canonica POS &mdash; Produto de Somas (&Pi;M)</div><div class="expr pos">${pf}</div></div>
+    </div>`;
+}
+
+/* ================================================================
+   RENDER — MAPA K
+   ================================================================ */
+function cStyle(gs){
+  if(!gs.length) return '';
+  const cols=gs.map(g=>GC[g%GC.length]);
+  if(gs.length===1) return `background:${rgba(cols[0],.2)};outline:2px solid ${rgba(cols[0],.62)};outline-offset:-2px;`;
+  const pct=100/cols.length;
+  const stops=cols.map((c,i)=>`${rgba(c,.25)} ${i*pct}%,${rgba(c,.25)} ${(i+1)*pct}%`).join(',');
+  return `background:linear-gradient(135deg,${stops});outline:2px solid ${rgba(cols[0],.62)};outline-offset:-2px;`;
+}
+
+function oneMap(cfg,mi,cg){
+  let h=`<table class="kmt"><tr><th class="corner">${cfg.corner}</th>`;
+  cfg.cL.forEach(l=>h+=`<th class="chdr">${l}</th>`);
+  h+='</tr>';
+  for(let r=0;r<cfg.rows;r++){
+    h+=`<tr><th class="rhdr">${cfg.rL[r]}</th>`;
+    for(let c=0;c<cfg.cols;c++){
+      const m=cfg.cell(r,c,mi);
+      const v=OUT[m];
+      const cl=v==='X'?'vx':(v===1?'v1':'v0');
+      const gs=cg[m]||[];
+      h+=`<td class="kcell ${cl}" style="${cStyle(gs)}"><span class="midx">${m}</span>${v==='X'?'X':v}</td>`;
+    }
+    h+='</tr>';
+  }
+  h+='</table>';
+  return h;
+}
+
+function renderKmap(cid, mode){
+  const isSOP=mode==='sop';
+  const tgts=isSOP?MTs():MXTs();
+  const dcs=DCs(), vars=AV.slice(0,nV);
+
+  const {pis}=qm(tgts,dcs,nV);
+  const cov=minCov(pis,tgts);
+
+  const cg={};
+  cov.forEach((pi,idx)=>{
+    for(const m of pi.ms)
+      if(tgts.includes(m)||dcs.includes(m)){
+        if(!cg[m]) cg[m]=[];
+        if(!cg[m].includes(idx)) cg[m].push(idx);
+      }
+  });
+
+  const cfg=kCfg();
+  let h=`<div class="kmap-outer"><div class="kmap-wrap">`;
+  for(let mi=0;mi<cfg.nM;mi++){
+    h+=`<div class="kmap-unit">`;
+    if(cfg.mL[mi]) h+=`<div class="kmap-sublbl">${cfg.mL[mi]}</div>`;
+    h+=oneMap(cfg,mi,cg);
+    h+='</div>';
+  }
+  h+='</div>';
+
+  if(cov.length){
+    h+=`<div class="glegend">`;
+    cov.forEach((pi,idx)=>{
+      const col=GC[idx%GC.length];
+      const term=isSOP?sopT(pi.p,vars):posF(pi.p,vars);
+      const ml=[...pi.ms].filter(m=>tgts.includes(m)).sort((a,b)=>a-b).join(',');
+      h+=`<div class="gitem" style="background:${rgba(col,.1)};border-color:${rgba(col,.4)}">
+            <span class="gdot" style="background:${col}"></span>
+            <span style="color:${col}">${term}</span>
+            <span style="color:var(--txt2);font-size:.72rem"> {${ml}}</span>
+          </div>`;
+    });
+    h+='</div>';
+  } else {
+    const emptyMsg = tgts.length
+      ? 'Nenhum agrupamento encontrado.'
+      : isSOP
+        ? 'Nenhum termo SOP (\u03A3m) \u2014 F\u00a0=\u00a00 em toda a tabela.'
+        : 'Nenhum termo POS (\u03A0M) \u2014 F\u00a0=\u00a01 em toda a tabela.';
+    h+=`<div style="color:var(--txt2);font-size:.83rem;margin-top:.5rem">${emptyMsg}</div>`;
+  }
+  h+='</div>';
+  document.getElementById(cid).innerHTML=h;
+}
+
+/* ================================================================
+   RENDER — SIMPLIFICADAS
+   ================================================================ */
+function renderSimpl(){
+  const vars=AV.slice(0,nV), fn=`F(${vars.join(',')})`;
+  const mts=MTs(), mxts=MXTs(), dcs=DCs();
+  const {pis:sp}=qm(mts,dcs,nV); const sc=minCov(sp,mts);
+  const {pis:pp}=qm(mxts,dcs,nV); const pc=minCov(pp,mxts);
+  const se=sopExpr(sc,mts,vars);
+  const pe=posExpr(pc,mxts,vars);
+  document.getElementById('sec-simplified').innerHTML=`
+    <div class="rgrid">
+      <div class="rbox rs">
+        <div class="rlbl">SOP Simplificado &mdash; Soma de Produtos (&Sigma;m)</div>
+        <div class="rval">${fn} = ${se}</div>
+      </div>
+      <div class="rbox rp">
+        <div class="rlbl">POS Simplificado &mdash; Produto de Somas (&Pi;M)</div>
+        <div class="rval">${fn} = ${pe}</div>
+      </div>
+    </div>`;
+}
+
+/* ================================================================
+   UPDATE PRINCIPAL
+   ================================================================ */
+function update(){
+  renderTT();
+  renderTerms();
+  renderCanonical();
+  renderKmap('sec-kmap-sop','sop');
+  renderSimpl();
+}
+
+/* ================================================================
+   CONTROLES
+   ================================================================ */
+function setVars(n){
+  if(isStudentMode) return;
+  nV=n;
+  OUT=new Array(1<<n).fill(0);
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.toggle('active',parseInt(b.textContent)===n));
+  update();
+}
+
+function resetAll(){
+  if(isStudentMode) return;
+  OUT=new Array(1<<nV).fill(0);
+  update();
+  toast('Resetado!');
+}
+
+/* ================================================================
+   MODO PROFESSOR
+   ================================================================ */
+function shareExercise(){
+  const data=JSON.stringify({n:nV,o:OUT});
+  const b64=btoa(unescape(encodeURIComponent(data)));
+  const url=window.location.origin+window.location.pathname+'#'+b64;
+  const d=document.getElementById('share-url');
+  d.style.display='block';
+  d.innerHTML=`<b style="color:var(--accent);font-size:.78rem">URL do exercicio &mdash; copie e compartilhe com os alunos:</b><br><span id="share-txt">${url}</span>`;
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(url).then(()=>toast('URL copiada!')).catch(()=>toast('URL exibida abaixo'));
+  else toast('URL exibida abaixo');
+}
+
+/* ================================================================
+   MODO ALUNO
+   ================================================================ */
+function enterStudentMode(){
+  isStudentMode = true;
+
+  // Mostrar banner do aluno
+  document.getElementById('student-banner').style.display = 'block';
+
+  // Ocultar secao de respostas ate o aluno revelar
+  document.getElementById('sec-simplified-card').style.display = 'none';
+
+  // Desabilitar botoes de variaveis
+  document.querySelectorAll('.vbtn').forEach(b=>{
+    b.style.pointerEvents = 'none';
+    b.style.opacity = '.4';
+    b.style.cursor = 'default';
+  });
+
+  // Atualizar info da tabela verdade para modo leitura
+  const ttInfo = document.getElementById('tt-info');
+  if(ttInfo) ttInfo.innerHTML =
+    'Tabela verdade do exercicio <b>(somente leitura)</b>. Analise os valores de F e resolva usando o Mapa de Karnaugh acima.';
+
+  const ttBadge = document.getElementById('tt-badge');
+  if(ttBadge) ttBadge.textContent = 'Somente Leitura';
+
+  // Atualizar subtitulo do cabecalho
+  const hdrSub = document.getElementById('header-sub');
+  if(hdrSub) hdrSub.innerHTML =
+    '<b style="color:var(--accent)">Modo Aluno</b> &nbsp;&bull;&nbsp; Exercicio compartilhado pelo professor &nbsp;&bull;&nbsp; SOP &amp; POS';
+}
+
+function revealAnswer(){
+  const card = document.getElementById('sec-simplified-card');
+  card.style.display = 'block';
+
+  const btn = document.getElementById('student-reveal-btn');
+  btn.textContent = '\u2713 Resposta revelada';
+  btn.disabled = true;
+  btn.style.opacity = '.55';
+  btn.style.cursor = 'default';
+
+  setTimeout(()=>{
+    card.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 80);
+  toast('Resposta revelada!');
+}
+
+function checkStudentAnswer(type){
+  const vars = AV.slice(0, nV);
+  const mts = MTs(), mxts = MXTs(), dcs = DCs();
+  const {pis:sp} = qm(mts, dcs, nV); const sc = minCov(sp, mts);
+  const {pis:pp} = qm(mxts, dcs, nV); const pc = minCov(pp, mxts);
+  const se = sopExpr(sc, mts, vars);
+  const pe = posExpr(pc, mxts, vars);
+
+  // Normaliza para comparacao: sem espacos, minusculo
+  const norm = s => s.trim().toLowerCase().replace(/\s+/g,'');
+
+  if(type === 'sop'){
+    const inp = document.getElementById('student-sop-input').value;
+    const fb  = document.getElementById('student-sop-feedback');
+    if(!inp.trim()){
+      fb.textContent = 'Digite sua resposta antes de verificar.';
+      fb.className = 'student-feedback fail';
+      return;
+    }
+    if(norm(inp) === norm(se)){
+      fb.textContent = 'Correto! \u2713';
+      fb.className = 'student-feedback ok';
+    } else {
+      fb.textContent = 'Nao confere. Tente novamente ou revele a resposta para conferir.';
+      fb.className = 'student-feedback fail';
+    }
+  } else {
+    const inp = document.getElementById('student-pos-input').value;
+    const fb  = document.getElementById('student-pos-feedback');
+    if(!inp.trim()){
+      fb.textContent = 'Digite sua resposta antes de verificar.';
+      fb.className = 'student-feedback fail';
+      return;
+    }
+    if(norm(inp) === norm(pe)){
+      fb.textContent = 'Correto! \u2713';
+      fb.className = 'student-feedback ok';
+    } else {
+      fb.textContent = 'Nao confere. Tente novamente ou revele a resposta para conferir.';
+      fb.className = 'student-feedback fail';
+    }
+  }
+}
+
+/* ================================================================
+   EXPORTAR PDF
+   ================================================================ */
+function exportPDF(){
+  toast('Abrindo dialogo de impressao...');
+  setTimeout(()=>window.print(),350);
+}
+
+/* ================================================================
+   EXPORTAR PNG (canvas manual)
+   ================================================================ */
+function exportPNG(){
+  const vars=AV.slice(0,nV), fn=`F(${vars.join(',')})`;
+  const mts=MTs(), mxts=MXTs(), dcs=DCs();
+  const {pis:sp}=qm(mts,dcs,nV); const sc=minCov(sp,mts);
+  const {pis:pp}=qm(mxts,dcs,nV); const pc=minCov(pp,mxts);
+  const se=sopExpr(sc,mts,vars);
+  const pe=posExpr(pc,mxts,vars);
+
+  /* draw k-map on canvas */
+  const cfg=kCfg();
+  const CELL=42, HDR=42, PAD=24;
+  const mapW=(cfg.cols+1)*CELL;
+  const mapH=(cfg.rows+1)*CELL;
+  const mPerRow=cfg.nM<=2?cfg.nM:2;
+  const mRows=Math.ceil(cfg.nM/mPerRow);
+  const W=Math.max(760, PAD*2 + mPerRow*(mapW+20));
+  const H=PAD*2 + 130 + mRows*(mapH + 30);
+
+  const cv=document.createElement('canvas');
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+
+  /* background */
+  ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#2ec4b6'; ctx.fillRect(0,0,W,3);
+
+  /* title */
+  ctx.fillStyle='#2ec4b6'; ctx.font='bold 20px sans-serif';
+  ctx.fillText('Calculadora de Veitch-Karnaugh',PAD,PAD+22);
+  ctx.fillStyle='#8080a8'; ctx.font='12px sans-serif';
+  ctx.fillText(`${fn}  |  ${nV} variaveis  |  ${1<<nV} linhas`,PAD,PAD+44);
+
+  /* expressions */
+  ctx.fillStyle='#1e2f50'; ctx.fillRect(PAD,PAD+56,W-PAD*2,1);
+  ctx.fillStyle='#2ec4b6'; ctx.font='bold 13px monospace';
+  ctx.fillText('SOP: '+fn+' = '+se,PAD,PAD+76);
+  ctx.fillStyle='#fca652'; ctx.font='bold 13px monospace';
+  ctx.fillText('POS: '+fn+' = '+pe,PAD,PAD+98);
+  ctx.fillStyle='#8080a8'; ctx.font='12px sans-serif';
+  ctx.fillText(
+    `SOP (\u03A3m): ${mts.length?'\u03A3m('+mts.join(',')+')'  :'nenhum'}` +
+    `  |  POS (\u03A0M): ${mxts.length?'\u03A0M('+mxts.join(',')+')'  :'nenhum'}` +
+    `${dcs.length?' | Don\u2019t cares: d('+dcs.join(',')+')'  :''}`,
+    PAD,PAD+118
+  );
+
+  /* build color map */
+  const cg={};
+  sc.forEach((pi,idx)=>{
+    for(const m of pi.ms) if(mts.includes(m)||dcs.includes(m)){if(!cg[m])cg[m]=[];cg[m].push(idx);}
+  });
+
+  /* draw maps */
+  const startY=PAD+136;
+  for(let mi=0;mi<cfg.nM;mi++){
+    const col=mi%mPerRow, row=Math.floor(mi/mPerRow);
+    const ox=PAD+col*(mapW+20), oy=startY+row*(mapH+30);
+
+    /* sub-label */
+    if(cfg.mL[mi]){
+      ctx.fillStyle='#2ec4b6'; ctx.font='bold 11px sans-serif';
+      ctx.textAlign='center'; ctx.fillText(cfg.mL[mi],ox+mapW/2,oy-4); ctx.textAlign='left';
+    }
+
+    /* corner */
+    ctx.fillStyle='#0d1f36'; ctx.fillRect(ox,oy,HDR,HDR);
+    ctx.strokeStyle='#1e2f50'; ctx.lineWidth=1; ctx.strokeRect(ox,oy,HDR,HDR);
+    ctx.fillStyle='#8080a8'; ctx.font='8px monospace';
+    ctx.fillText(cfg.corner,ox+3,oy+13);
+
+    /* col headers */
+    cfg.cL.forEach((l,c)=>{
+      const cx=ox+HDR+c*CELL;
+      ctx.fillStyle='#0d1f36'; ctx.fillRect(cx,oy,CELL,HDR);
+      ctx.strokeStyle='#1e2f50'; ctx.strokeRect(cx,oy,CELL,HDR);
+      ctx.fillStyle='#8080a8'; ctx.font='9px monospace'; ctx.textAlign='center';
+      ctx.fillText(l,cx+CELL/2,oy+HDR/2+4); ctx.textAlign='left';
+    });
+
+    /* rows */
+    for(let r=0;r<cfg.rows;r++){
+      const ry=oy+HDR+r*CELL;
+      ctx.fillStyle='#0d1f36'; ctx.fillRect(ox,ry,HDR,CELL);
+      ctx.strokeStyle='#1e2f50'; ctx.strokeRect(ox,ry,HDR,CELL);
+      ctx.fillStyle='#8080a8'; ctx.font='9px monospace'; ctx.textAlign='center';
+      ctx.fillText(cfg.rL[r],ox+HDR/2,ry+CELL/2+4); ctx.textAlign='left';
+
+      for(let c=0;c<cfg.cols;c++){
+        const m=cfg.cell(r,c,mi);
+        const v=OUT[m];
+        const cx=ox+HDR+c*CELL;
+        const gs=cg[m]||[];
+        if(gs.length){
+          ctx.fillStyle=rgba(GC[gs[0]%GC.length],.22);
+          ctx.fillRect(cx,ry,CELL,CELL);
+          ctx.strokeStyle=rgba(GC[gs[0]%GC.length],.7);
+          ctx.lineWidth=1.5; ctx.strokeRect(cx+1,ry+1,CELL-2,CELL-2); ctx.lineWidth=1;
+        } else {
+          ctx.fillStyle='#16213e'; ctx.fillRect(cx,ry,CELL,CELL);
+        }
+        ctx.strokeStyle='#1e2f50'; ctx.strokeRect(cx,ry,CELL,CELL);
+        ctx.fillStyle='#8080a8'; ctx.font='7px monospace';
+        ctx.fillText(String(m),cx+2,ry+9);
+        ctx.fillStyle=v===1?'#2ec4b6':(v==='X'?'#fca652':'#e94560');
+        ctx.font='bold 14px monospace'; ctx.textAlign='center';
+        ctx.fillText(v==='X'?'X':String(v),cx+CELL/2,ry+CELL/2+5);
+        ctx.textAlign='left';
+      }
+    }
+  }
+
+  /* footer */
+  ctx.fillStyle='#8080a8'; ctx.font='10px sans-serif';
+  ctx.fillText('Calculadora de Veitch-Karnaugh — '+new Date().toLocaleDateString('pt-BR'),PAD,H-10);
+
+  const a=document.createElement('a');
+  a.download='karnaugh.png'; a.href=cv.toDataURL('image/png'); a.click();
+  toast('PNG exportado!');
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+function init(){
+  if(window.location.hash){
+    try{
+      const raw=decodeURIComponent(escape(atob(window.location.hash.slice(1))));
+      const d=JSON.parse(raw);
+      if(d.n&&d.o&&d.n>=2&&d.n<=6&&d.o.length===(1<<d.n)){
+        nV=d.n; OUT=d.o;
+        document.querySelectorAll('.vbtn').forEach(b=>b.classList.toggle('active',parseInt(b.textContent)===nV));
+        update();
+        enterStudentMode();
+        toast('Exercicio carregado \u2014 Modo Aluno ativado!');
+        return;
+      }
+    }catch(e){}
+  }
+  setVars(4);
+}
+
+window.addEventListener('load',init);
+</script>
+</body>
+</html>
